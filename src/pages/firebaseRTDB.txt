@@ -1,0 +1,63 @@
+{
+  "rules": {
+    "products": {
+      ".read": "auth != null",
+      ".write": "auth.token.admin === true"
+    },
+    "users": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid",
+        "bucket": {
+          ".write": "$uid === auth.uid"
+        },
+        "orders": {
+          "$orderId": {
+            ".write": "auth.token.admin === true || $uid === auth.uid"
+          }
+        }
+      }
+    },
+    "orders": {
+      ".read": "auth.token.admin === true || auth.uid != null",
+      ".write": "auth.token.admin === true || (!data.exists() && auth.uid != null)",
+      "$orderId": {
+        ".write": "auth.token.admin === true || (!data.exists() && auth.uid != null)"
+      }
+    }
+  }
+}
+
+////////////////////////2///////////////////2////////////////2////////////////////////////////////
+
+{
+  "rules": {
+    "products": {
+      ".read": "auth != null",
+      ".write": "auth.token.admin === true"
+    },
+    "users": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid",
+        "bucket": {
+          ".write": "$uid === auth.uid"
+        },
+        "orders": {
+          "$orderId": {
+            ".read": "$uid === auth.uid || auth.token.admin === true",
+            ".write": "$uid === auth.uid || auth.token.admin === true"
+          }
+        }
+      }
+    },
+    "orders": {
+      ".read": "auth.token.admin === true || auth.uid != null",
+      ".write": "auth.token.admin === true || (!data.exists() && auth.uid != null)",
+
+      "$orderId": {
+        ".write": "auth.token.admin === true || (!data.exists() && auth.uid != null)"
+      }
+    }
+  }
+}
