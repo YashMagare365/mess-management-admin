@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../../firebase";
@@ -15,7 +15,7 @@ const Auth = () => {
   const navigate = useNavigate();
 
   // Login Logic (unchanged)
-  const handleLogin = async (e) => {
+  const handleLogin = async (e: any) => {
     e.preventDefault();
     setError("");
 
@@ -35,13 +35,13 @@ const Auth = () => {
       } else {
         setError("Access Denied: You are not an admin.");
       }
-    } catch (error) {
+    } catch (error: any) {
       setError(error.message);
     }
   };
 
   // Sign Up Logic
-  const handleSignUp = async (e) => {
+  const handleSignUp = async (e: any) => {
     e.preventDefault();
     setError("");
 
@@ -88,7 +88,7 @@ const Auth = () => {
         console.error("Sign-up failed:", signUpResponse.data.message);
         setError(signUpResponse.data.message || "Sign Up failed.");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Sign-up error:", error);
 
       // Handle specific Axios errors

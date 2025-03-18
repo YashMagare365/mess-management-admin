@@ -8,24 +8,41 @@ import {
   getDatabase,
   update,
 } from "firebase/database";
-import { auth, database } from "../../firebase";
+import { database } from "../../firebase";
 import { onAuthStateChanged, signOut, getAuth } from "firebase/auth";
 import { Scanner } from "@yudiel/react-qr-scanner";
 
+interface Order {
+  id: string;
+  uid: string;
+  userName: string;
+  mobile: string;
+  address: string;
+  total: number;
+  status: string;
+  orderType: string;
+}
+
+interface UserData {
+  displayName: string;
+  address: string;
+}
+
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [orders, setOrders] = useState<any[]>([]);
-  const [deliveryOrders, setDeliveryOrders] = useState<any[]>([]);
-  const [pickupOrders, setPickupOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [deliveryOrders, setDeliveryOrders] = useState<Order[]>([]);
+  const [pickupOrders, setPickupOrders] = useState<Order[]>([]);
   const [productName, setProductName] = useState("");
   const [productPrice, setProductPrice] = useState("");
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
-  const [userData, setUserData] = useState<any[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
   const [products, setProducts] = useState<any[]>([]);
+  // const [productIds, setProductIds] = useState<any[]>([]);
 
   const db = getDatabase();
   const auth = getAuth();
@@ -33,11 +50,9 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        console.log("Current user===>", currentUser);
         const idTokenResult = await currentUser.getIdTokenResult();
         if (idTokenResult.claims.admin) {
           setUser(currentUser);
-          console.log(currentUser);
         } else {
           alert("Access Denied: You are not an admin.");
           navigate("/");
@@ -57,7 +72,43 @@ const Dashboard: React.FC = () => {
     const ordersRef = ref(database, "orders/");
     onValue(ordersRef, (snapshot) => {
       const data = snapshot.val();
+      console.log("DATA===>>", data);
       const demo = Object.keys(data).map((key) => ({ id: key, ...data[key] }));
+      const temp = Object.keys(data).map((key) => ({
+        id: key,
+        ...data[key].items,
+      }));
+      console.log("TEMP=====>>", temp);
+      const matchingOrders = [];
+
+      // Iterate over each group in temp
+      for (let i = 0; i < temp.length; i++) {
+        const orderGroup = temp[i];
+
+        // Check if orderGroup has nested orders (array)
+        if (Array.isArray(orderGroup)) {
+          // Iterate over each order in the nested array
+          for (let j = 0; j < orderGroup.length; j++) {
+            const order = orderGroup[j];
+
+            // Check if the order has a messId and matches the user's uid
+            if (order && order.messId === user.uid) {
+              console.log("order==>>", order);
+              console.log("Matching orders==>", matchingOrders);
+              matchingOrders.push(order);
+            }
+          }
+        }
+      }
+
+      // Update the orders state with the matching orders
+      console.log("Matching orders==>", matchingOrders);
+      setOrders(matchingOrders);
+      // const productIdsSet = new Set(productIds);
+      // console.log("SET==>", productIdsSet);
+      // const filteredItems = temp.filter((item) => productIdsSet.has(item.id));
+      // console.log("filtered==>", filteredItems);
+
       const filtered = demo.filter((order) => order.status === "Pending");
       const pickup = filtered.filter((order) => order.orderType === "Pickup");
       const delivery = filtered.filter(
@@ -71,7 +122,6 @@ const Dashboard: React.FC = () => {
     const userRef = ref(database, "admins/" + user.uid);
     onValue(userRef, (snapshot) => {
       const data = snapshot.val();
-      console.log("User Data====>", data);
       setUserData(data);
     });
   }, [user]);
@@ -82,11 +132,16 @@ const Dashboard: React.FC = () => {
     const productsRef = ref(database, "products/");
     onValue(productsRef, (snapshot) => {
       const data = snapshot.val();
+      console.log("DATA====>>", data);
       if (data) {
         const productList = Object.keys(data).map((key) => ({
           id: key,
           ...data[key],
         }));
+        const tempArr = Object.entries(data).map(([id]) => ({
+          id,
+        }));
+        console.log(tempArr);
         setProducts(productList);
       } else {
         setProducts([]);
@@ -94,27 +149,27 @@ const Dashboard: React.FC = () => {
     });
   }, [user]);
 
-  const handleOrderClick = (orderId: string, order: any) => {
+  const handleOrderClick = (orderId: string, order: Order) => {
     setSelectedOrderId(orderId);
     setSelectedOrder(order);
     setIsModalOpen(true);
   };
 
-  const handleScan = (result: string) => {
-    if (result[0].rawValue === selectedOrderId) {
+  const handleScan = (result: any) => {
+    if (result[0].rawValue === selectedOrderId && selectedOrder) {
       alert("QR Code Matched!");
       update(ref(db, `/orders/${selectedOrderId}`), {
         status: "Delivered",
       })
         .then(() => alert("Order delivered successfully!"))
-        .catch((error) =>
+        .catch((error: any) =>
           alert("Error updating order status: " + error.message)
         );
       update(ref(db, `/users/${selectedOrder.uid}/orders/${selectedOrderId}`), {
         status: "Delivered",
       })
         .then(() => alert("Order delivered successfully!"))
-        .catch((error) =>
+        .catch((error: any) =>
           alert("Error updating order status: " + error.message)
         );
       setIsModalOpen(false);
@@ -124,7 +179,7 @@ const Dashboard: React.FC = () => {
   };
 
   const handleAddProduct = async () => {
-    if (!productName || !productPrice) {
+    if (!productName || !productPrice || !userData) {
       alert("Please fill in all fields.");
       return;
     }
@@ -149,7 +204,7 @@ const Dashboard: React.FC = () => {
     try {
       await set(productRef, null);
       alert("Product deleted successfully!");
-    } catch (error) {
+    } catch (error: any) {
       alert("Error deleting product: " + error.message);
     }
   };
@@ -167,7 +222,7 @@ const Dashboard: React.FC = () => {
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-semibold text-gray-700">
-            {userData.displayName}
+            {userData?.displayName}
           </h2>
           <div className="gap-2 flex flex-row">
             <button
@@ -202,27 +257,54 @@ const Dashboard: React.FC = () => {
               {orders.length === 0 ? (
                 <p className="text-gray-500 text-center">No orders found</p>
               ) : (
-                <ul className="divide-y divide-gray-300">
-                  {orders.map((order) => (
+                <ul className="divide-y divide-gray-200">
+                  {orders.map((order: any, index: Number) => (
                     <li
-                      key={order.id}
-                      className="py-3 px-4 flex justify-between items-center bg-gray-50 rounded-md shadow-sm mb-2 cursor-pointer"
+                      key={String(index)}
                       onClick={() => handleOrderClick(order.id, order)}
+                      className="p-4 hover:bg-gray-50 cursor-pointer transition-colors duration-200"
                     >
-                      <div className="flex flex-col">
-                        <p className="text-gray-700 font-semibold">
-                          Name: {order.userName}
+                      <div className="space-y-2">
+                        <h3 className="text-lg font-semibold text-gray-800">
+                          Order ID: {order.id}
+                        </h3>
+                        <p className="text-sm text-gray-600">
+                          Mess Address: {order.messAdress}
                         </p>
-                        <p className="text-gray-700 font-semibold">
-                          Phone: {order.mobile}
+                        <p className="text-sm text-gray-600">
+                          Total Price: ₹{order.totalPrice}
                         </p>
-                        <span className="text-sm text-gray-500">
-                          {order.address}
-                        </span>
+                        <h4 className="text-md font-medium text-gray-700">
+                          Items:
+                        </h4>
+                        <ul className="space-y-2">
+                          {order.items && order.items.length > 0 ? (
+                            order.items.map((item: any, itemIndex: Number) => (
+                              <li
+                                key={Number(itemIndex)}
+                                className="bg-gray-100 p-3 rounded-lg"
+                              >
+                                <p className="text-sm text-gray-700">
+                                  <span className="font-medium">Product:</span>{" "}
+                                  {item.productName}
+                                </p>
+                                <p className="text-sm text-gray-700">
+                                  <span className="font-medium">Quantity:</span>{" "}
+                                  {item.quantity}
+                                </p>
+                                <p className="text-sm text-gray-700">
+                                  <span className="font-medium">Price:</span> ₹
+                                  {item.price}
+                                </p>
+                              </li>
+                            ))
+                          ) : (
+                            <p className="text-sm text-gray-500">
+                              No items found in this order.
+                            </p>
+                          )}
+                        </ul>
                       </div>
-                      <span className="text-green-600 font-bold text-lg">
-                        ₹{order.total}
-                      </span>
                     </li>
                   ))}
                 </ul>
