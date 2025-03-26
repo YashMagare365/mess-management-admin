@@ -1,16 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  ref,
-  push,
-  set,
-  onValue,
-  getDatabase,
-  update,
-} from "firebase/database";
+import { ref, push, set, onValue } from "firebase/database";
 import { database } from "../../firebase";
 import { onAuthStateChanged, signOut, getAuth } from "firebase/auth";
-import { Scanner } from "@yudiel/react-qr-scanner";
+// import { useNavigate } from 'react-router-dom';
 
 interface Order {
   id: string;
@@ -29,7 +22,7 @@ interface UserData {
 }
 
 const Dashboard: React.FC = () => {
-  const navigate = useNavigate();
+  // const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>([]);
   const [deliveryOrders, setDeliveryOrders] = useState<Order[]>([]);
   const [pickupOrders, setPickupOrders] = useState<Order[]>([]);
@@ -37,14 +30,12 @@ const Dashboard: React.FC = () => {
   const [productPrice, setProductPrice] = useState("");
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [products, setProducts] = useState<any[]>([]);
+  const navigate = useNavigate();
   // const [productIds, setProductIds] = useState<any[]>([]);
 
-  const db = getDatabase();
+  // const db = getDatabase();
   const auth = getAuth();
 
   useEffect(() => {
@@ -69,7 +60,7 @@ const Dashboard: React.FC = () => {
   // Fetch Orders from Firebase
   useEffect(() => {
     if (!user) return;
-    const ordersRef = ref(database, "orders/");
+    const ordersRef = ref(database, `orders/${user.uid}`);
     onValue(ordersRef, (snapshot) => {
       const data = snapshot.val();
       console.log("DATA===>>", data);
@@ -129,7 +120,7 @@ const Dashboard: React.FC = () => {
   // Fetch Products from Firebase
   useEffect(() => {
     if (!user) return;
-    const productsRef = ref(database, "products/");
+    const productsRef = ref(database, `products/${user.uid}`);
     onValue(productsRef, (snapshot) => {
       const data = snapshot.val();
       console.log("DATA====>>", data);
@@ -138,10 +129,12 @@ const Dashboard: React.FC = () => {
           id: key,
           ...data[key],
         }));
-        const tempArr = Object.entries(data).map(([id]) => ({
-          id,
-        }));
-        console.log(tempArr);
+
+        console.log("prodList====>", productList[1]);
+        // const tempArr = Object.entries(data).map(([id]) => ({
+        //   id,
+        // }));
+        // console.log(tempArr);
         setProducts(productList);
       } else {
         setProducts([]);
@@ -149,42 +142,14 @@ const Dashboard: React.FC = () => {
     });
   }, [user]);
 
-  const handleOrderClick = (orderId: string, order: Order) => {
-    setSelectedOrderId(orderId);
-    setSelectedOrder(order);
-    setIsModalOpen(true);
-  };
-
-  const handleScan = (result: any) => {
-    if (result[0].rawValue === selectedOrderId && selectedOrder) {
-      alert("QR Code Matched!");
-      update(ref(db, `/orders/${selectedOrderId}`), {
-        status: "Delivered",
-      })
-        .then(() => alert("Order delivered successfully!"))
-        .catch((error: any) =>
-          alert("Error updating order status: " + error.message)
-        );
-      update(ref(db, `/users/${selectedOrder.uid}/orders/${selectedOrderId}`), {
-        status: "Delivered",
-      })
-        .then(() => alert("Order delivered successfully!"))
-        .catch((error: any) =>
-          alert("Error updating order status: " + error.message)
-        );
-      setIsModalOpen(false);
-    } else {
-      alert("Invalid QR Code. Please scan the correct order QR.");
-    }
-  };
-
   const handleAddProduct = async () => {
     if (!productName || !productPrice || !userData) {
       alert("Please fill in all fields.");
       return;
     }
+    // console.log("user data"===> userData)
 
-    const productRef = ref(database, "/products/");
+    const productRef = ref(database, `/products/${user.uid}`);
     const newProductRef = push(productRef);
     await set(newProductRef, {
       productName: productName,
@@ -200,7 +165,7 @@ const Dashboard: React.FC = () => {
   };
 
   const handleDeleteProduct = async (productId: string) => {
-    const productRef = ref(database, `/products/${productId}`);
+    const productRef = ref(database, `/products/${user.uid}/${productId}`);
     try {
       await set(productRef, null);
       alert("Product deleted successfully!");
@@ -261,7 +226,12 @@ const Dashboard: React.FC = () => {
                   {orders.map((order: any, index: Number) => (
                     <li
                       key={String(index)}
-                      onClick={() => handleOrderClick(order.id, order)}
+                      onClick={() => {
+                        // handleOrderClick(order.id, order);
+                        navigate("/order", {
+                          state: { orderId: order.id, order: order },
+                        });
+                      }}
                       className="p-4 hover:bg-gray-50 cursor-pointer transition-colors duration-200"
                     >
                       <div className="space-y-2">
@@ -376,27 +346,6 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {/* QR Code Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
-          <div className="bg-white p-6 rounded-lg shadow-lg text-center">
-            <h3 className="text-lg font-semibold mb-4">
-              Scan QR Code for Order: {selectedOrderId}
-            </h3>
-            <Scanner
-              onScan={handleScan}
-              onError={(error) => console.error(error)}
-            />
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="mt-4 bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
